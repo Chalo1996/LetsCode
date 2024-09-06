@@ -1,0 +1,111 @@
+.body {
+  padding: 0;
+  margin: 0;
+  font-family: sans-serif;
+}
+
+.header {
+  background-color: #7fffd4;
+  height: 3.5rem;
+  padding: 0 1.5rem;
+}
+
+.main {
+  padding: 1rem;
+}
+
+.nav {
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 1.5rem; /* Adds spacing between the list items */
+}
+
+.shoplink,
+.productlink {
+  margin: 0;
+  padding: 0;
+}
+
+.shoplink a,
+.productlink a {
+  color: #000000;
+  text-decoration: none;
+  padding: 0.5rem 1rem; /* Adds padding inside the links */
+  border-radius: 5px; /* Optional: adds rounded corners */
+  display: inline-block;
+}
+
+.shoplink a:hover,
+.shoplink a:active,
+.shoplink a.active,
+.productlink a:hover,
+.productlink a:active,
+.productlink a.active {
+  color: #0000ff;
+  background-color: #e0f7fa; /* Optional: adds a background color on hover */
+}
+
+.card {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.26);
+  margin-top: 8px;
+  width: 100%;
+  height: auto;
+}
+
+.card__header,
+.card__content {
+  padding: 1rem;
+}
+
+.card__header h1,
+.card__content h1,
+.card__content h2,
+.card__content p {
+  margin: 0;
+}
+
+.card__image {
+  width: 100%;
+}
+
+.card__image img {
+  width: 100%;
+}
+
+.card__actions {
+  padding: 1rem;
+  text-align: center;
+}
+
+.card__actions button,
+.card__actions a {
+  margin: 0 0.25rem;
+}
+
+.btn {
+  font: inherit;
+  border: 1px solid #00695c;
+  color: #00695c;
+  background: white;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.btn:hover,
+.btn:active {
+  background-color: #00695c;
+  color: white;
+}
+
+img {
+  width: 100px;
+  height: 450px;
+}

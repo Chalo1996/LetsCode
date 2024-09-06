@@ -1,0 +1,14 @@
+The function isNumeric you've written has a few issues:
+
+The syntax val in values is not correct for checking if a value is included in an array.
+The use of values.every(...) should return a boolean, but wrapping it in an array [] and then checking if it is included in [1, 2, 3, 4, 5] is not logical.
+The logic itself needs adjustment to check if all the provided values are numbers and if they are in the specified array.
+Here is a corrected version of your function:
+
+const isNumeric = (...values) => {
+  return values.every((val) => [1, 2, 3, 4, 5].includes(val));
+};
+
+console.log(isNumeric(1, 2, 3, 4, 5)); // true
+console.log(isNumeric(1, 2, 6)); // false
+console.log(isNumeric(1, 2, '3')); // false
