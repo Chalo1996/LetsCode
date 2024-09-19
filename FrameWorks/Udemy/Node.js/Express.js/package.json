@@ -10,11 +10,15 @@
   "author": "Emmanuel Chalo",
   "license": "ISC",
   "dependencies": {
+    "dotenv": "^16.4.5",
     "ejs": "^3.1.10",
     "express": "^4.19.2",
     "express-handlebars": "^7.1.2",
+    "express-session": "^1.18.0",
+    "mysql2": "^3.11.2",
     "nodemon": "^3.1.0",
-    "pug": "^3.0.2"
+    "pug": "^3.0.2",
+    "sequelize": "^6.37.3"
   },
   "type": "module"
 }

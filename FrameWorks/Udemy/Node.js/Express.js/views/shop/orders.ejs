@@ -7,6 +7,23 @@
     <header class="header">
       <%- include("../includes/navigation.ejs") %>
     </header>
+    <main>
+      <% if (orders.length > 0) { %>
+        <ul>
+          <% orders.forEach(order => { %>
+           <li>
+            <h1># <%= order.id %></h1>
+            <ul>
+              <% order.Products.forEach(product => { %>
+               <li><%= product.title %> (<%= product.OrderItem.quantity %>)</li>
+              <% }) %>
+            </ul>
+          </li>
+          <% }) %>
+        </ul>
+      <%} else {%>
+        <h1>No orders yet!</h1>
+      <%} %>
+    </main>
 
-    <h1>No orders yet!</h1>
     <%- include("../includes/head.ejs") %>

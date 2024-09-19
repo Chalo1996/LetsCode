@@ -8,6 +8,7 @@ import {
   getProduct,
   postCart,
   postDeleteItemFromCart,
+  postOrder,
 } from "../controllers/shop.js";
 
 const Router = express.Router();
@@ -19,6 +20,7 @@ Router.get("/cart", getCart);
 Router.post("/cart", postCart);
 Router.get("/checkout", getCheckout);
 Router.get("/orders", getOrders);
+Router.post("/create-order", postOrder);
 Router.post("/cart-delete-item/:productId", postDeleteItemFromCart);
 
 export default Router;

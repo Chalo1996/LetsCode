@@ -1,0 +1,15 @@
+C:\Users\Emmanuel.Chalo\Coding\C#\crash_basics\HelloWorld\bin\Debug\net8.0\HelloWorld.exe
+C:\Users\Emmanuel.Chalo\Coding\C#\crash_basics\HelloWorld\bin\Debug\net8.0\HelloWorld.deps.json
+C:\Users\Emmanuel.Chalo\Coding\C#\crash_basics\HelloWorld\bin\Debug\net8.0\HelloWorld.runtimeconfig.json
+C:\Users\Emmanuel.Chalo\Coding\C#\crash_basics\HelloWorld\bin\Debug\net8.0\HelloWorld.dll
+C:\Users\Emmanuel.Chalo\Coding\C#\crash_basics\HelloWorld\bin\Debug\net8.0\HelloWorld.pdb
+C:\Users\Emmanuel.Chalo\Coding\C#\crash_basics\HelloWorld\obj\Debug\net8.0\HelloWorld.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Emmanuel.Chalo\Coding\C#\crash_basics\HelloWorld\obj\Debug\net8.0\HelloWorld.AssemblyInfoInputs.cache
+C:\Users\Emmanuel.Chalo\Coding\C#\crash_basics\HelloWorld\obj\Debug\net8.0\HelloWorld.AssemblyInfo.cs
+C:\Users\Emmanuel.Chalo\Coding\C#\crash_basics\HelloWorld\obj\Debug\net8.0\HelloWorld.csproj.CoreCompileInputs.cache
+C:\Users\Emmanuel.Chalo\Coding\C#\crash_basics\HelloWorld\obj\Debug\net8.0\HelloWorld.sourcelink.json
+C:\Users\Emmanuel.Chalo\Coding\C#\crash_basics\HelloWorld\obj\Debug\net8.0\HelloWorld.dll
+C:\Users\Emmanuel.Chalo\Coding\C#\crash_basics\HelloWorld\obj\Debug\net8.0\refint\HelloWorld.dll
+C:\Users\Emmanuel.Chalo\Coding\C#\crash_basics\HelloWorld\obj\Debug\net8.0\HelloWorld.pdb
+C:\Users\Emmanuel.Chalo\Coding\C#\crash_basics\HelloWorld\obj\Debug\net8.0\HelloWorld.genruntimeconfig.cache
+C:\Users\Emmanuel.Chalo\Coding\C#\crash_basics\HelloWorld\obj\Debug\net8.0\ref\HelloWorld.dll

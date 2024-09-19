@@ -1,12 +1,12 @@
 import { randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
-import { Cart } from "./cart.js";
+import { Cart } from "./file_cart.js";
 
 const paths = [process.cwd(), "data", "products.json"];
 const filePath = path.join(...paths);
 
-export class Product {
+export default class FileProduct {
   constructor(id, title, ImgUrl, price, description) {
     this.id = id ? id : randomUUID();
     this.title = title;
