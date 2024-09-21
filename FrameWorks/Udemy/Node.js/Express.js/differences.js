@@ -4,4 +4,4 @@ function greet(greeting, punctuation) {
 
 const person = { name: "Jembe" };
 
-greet.apply(person, ["Hello", "!"]);
+greet.call(person, "Hello", "!");

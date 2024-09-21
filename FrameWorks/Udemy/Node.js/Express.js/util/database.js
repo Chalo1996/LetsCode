@@ -1,3 +1,5 @@
+// When working with sequelize -> SQL: uncomment
+
 import { Sequelize } from "sequelize";
 import dotenv from "dotenv";
 
