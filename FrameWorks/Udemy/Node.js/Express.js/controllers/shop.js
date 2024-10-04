@@ -227,7 +227,6 @@ import PDFDocument from "pdfkit";
 import Product from "../models/mongo_product.js";
 import Order from "../models/order_items.js";
 import Stripe from "stripe";
-
 import { config } from "dotenv";
 
 config()
