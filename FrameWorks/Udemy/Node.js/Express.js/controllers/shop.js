@@ -1,4 +1,3 @@
-// import Product from "../models/db_product.js";
 
 // export function getProducts(req, res, next) {
 //   req.user
@@ -228,6 +227,10 @@ import PDFDocument from "pdfkit";
 import Product from "../models/mongo_product.js";
 import Order from "../models/order_items.js";
 import Stripe from "stripe";
+
+import { config } from "dotenv";
+
+config()
 
 const ITEMS_PER_PAGE = 3;
 
