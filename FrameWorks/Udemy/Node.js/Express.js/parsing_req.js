@@ -2,9 +2,20 @@ import express from "express";
 import path from "path";
 import adminRoutes from "./routes/admin.js";
 import shopRoutes from "./routes/shop.js";
+import authRoutes from "./routes/auth.js";
 import { getErrorPage } from "./controllers/error.js";
-import { mongoConnect } from "./util/mongodb.js";
 import User from "./models/mongo_user.js";
+import mongoose from "mongoose";
+import session from "express-session";
+import connectMongoDBSession from "connect-mongodb-session";
+import { Auth } from "./middleware/isAuth.js";
+import csurf from "csurf";
+import { config } from "dotenv";
+import multer from "multer";
+import fs from "fs";
+import bodyParser from "body-parser";
+
+config();
 
 // These imports were used when working with sequelize
 
@@ -16,43 +27,95 @@ import User from "./models/mongo_user.js";
 // import Order from "./models/order.js";
 // import OrderItem from "./models/order_items.js";
 
+const uri = "mongodb://localhost:27017/shop";
+
 const app = express();
+
+const MongoDBStore = connectMongoDBSession(session);
+const store = new MongoDBStore({ uri, collection: "sessions" });
+const csrfProtection = csurf();
 const viewPath = [process.cwd(), "views"];
-const staticFilesPath = [process.cwd(), "public"];
+
+// File storage configuration for multer
+const fileStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadPath = path.join(process.cwd(), "images");
+
+    // Ensure that the "images" directory exists
+    if (!fs.existsSync(uploadPath)) {
+      fs.mkdirSync(uploadPath, { recursive: true });
+    }
+
+    // Save file to "images" folder
+    cb(null, uploadPath);
+  },
+  filename: (req, file, cb) => {
+    // Construct a unique filename with timestamp and original name
+    cb(null, `${Date.now()}-${file.originalname}`);
+  },
+});
+
+// File filter function to limit uploads to certain MIME types (optional)
+const fileFilter = (req, file, cb) => {
+  if (
+    file.mimetype === "image/jpeg" ||
+    file.mimetype === "image/png" ||
+    file.mimetype === "image/jpg"
+  ) {
+    // Accept file
+    cb(null, true);
+  } else {
+    // Reject file
+    cb(null, false);
+  }
+};
+
 app.set("view engine", "ejs");
 app.set("views", path.join(...viewPath));
 
 // Use express.urlencoded middleware
-app.use(express.urlencoded({ extended: true }));
+app.use(bodyParser.urlencoded({ extended: true }));
 
-// Serve static files
-app.use(express.static(path.join(...staticFilesPath)));
+// Multer middleware configuration
+app.use(
+  multer({
+    storage: fileStorage,
+    fileFilter,
+    // Limit file size to 5MB
+    limits: { fileSize: 1024 * 1024 * 5 },
+  }).single("image")
+);
 
-// Middleware to make the user available in all requests --> When working with sequelize -> SQL: uncomment
+// Serve static files for "public" and "images" directories
+app.use(express.static(path.join(process.cwd(), "public")));
+app.use("/images/", express.static(path.join(process.cwd(), "images")));
 
-// app.use((req, res, next) => {
-//   // Find the user by email instead of by primary key
-//   User.findOne({ where: { email: "emusyoka759@gmail.com" } })
-//     .then((user) => {
-//       if (user) {
-//         // Attach the user object to the request
-//         req.user = user;
-//       } else {
-//         console.log("User not found");
-//       }
-//       // Continue to the next middleware or route
-//       next();
-//     })
-//     .catch((err) => console.error("Error fetching user:", err));
-// });
+// Session manager
+app.use(
+  session({
+    secret: process.env.COOKIE_SIGN,
+    saveUninitialized: false,
+    resave: false,
+    store,
+  })
+);
 
-// Middleware to attach user to req
+// A middleware to protect against CSRF attacks
+app.use(csrfProtection);
+
+// Middleware to make the user available in all requests
 app.use((req, res, next) => {
-  User.findByEmail("emusyoka759@gmail.com")
+  if (!req.session.user) {
+    // If no user in session, proceed without attaching a user to the request
+    return next();
+  }
+
+  // Fetch the user by email if the session has a user
+  User.findOne({ email: req.session.user.email })
     .then((user) => {
       if (user) {
-        console.log("User found and set to req.user:", user);
-        req.user = new User(user.id, user.name, user.email, user.cart);
+        // Attach the user object to the request if found
+        req.user = user;
       } else {
         console.log("User not found");
       }
@@ -64,12 +127,30 @@ app.use((req, res, next) => {
     });
 });
 
+// Pass local variables to views
+app.use((req, res, next) => {
+  res.locals.isAuthenticated = req.session.isLoggedIn;
+  res.locals.csrfToken = req.csrfToken();
+
+  next();
+});
+
 // Use the admin and shop routes
-app.use("/admin", adminRoutes);
+app.use("/admin", Auth, adminRoutes);
 app.use(shopRoutes);
+app.use(authRoutes);
 
 // 404 error page
 app.use(getErrorPage);
+
+// Error Middleware
+app.use((error, req, res, next) => {
+  res.status(500).render("errors/error-page", {
+    pageTitle: "Error",
+    path: "/error-page",
+    errorMessage: error.message || "Something went wrong!",
+  });
+});
 
 // Define relationships --> When working with sequelize -> SQL: uncomment
 // Product.belongsTo(User, {
@@ -137,27 +218,26 @@ app.use(getErrorPage);
 //     console.error("An error occurred syncing with the database", error);
 //   });
 
-// Start the server after connecting to MongoDB
-mongoConnect()
-  .then(async () => {
-    // Check if user exists in MongoDB
-    const userEmail = "emusyoka759@gmail.com";
-    const existingUser = await User.findByEmail(userEmail);
+const connectToDatabase = async () => {
+  try {
+    // Connect to your MongoDB database
+    await mongoose.connect(uri, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
 
-    if (existingUser) {
-      console.log("User already exists:", existingUser);
-    } else {
-      // Create a new user if not found
-      const newUser = new User(null, "Emmanuel Chalo", userEmail);
-      await newUser.save();
-      console.log("New user created:", newUser);
-    }
+    console.log("Connected to MongoDB");
+  } catch (err) {
+    console.error("Error connecting to the database or creating user:", err);
+  }
+};
 
-    // Start the server
+connectToDatabase()
+  .then(() => {
     app.listen(3000, () => {
       console.log("Server listening on port 3000");
     });
   })
-  .catch((err) => {
-    console.error("Failed to connect to MongoDB:", err);
-  });
+  .catch((error) =>
+    console.error("Could not establish connect with the server", error)
+  );

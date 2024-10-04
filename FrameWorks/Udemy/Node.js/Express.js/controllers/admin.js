@@ -15,7 +15,7 @@
 // export function postAddProduct(req, res, next) {
 //   const { title, imageUrl, price, description } = req.body;
 
-//   req.user
+//   req.session
 //     .createProduct({
 //       title,
 //       price,
@@ -38,7 +38,7 @@
 //     return res.redirect("/");
 //   }
 //   const productId = req.params.productId;
-//   req.user
+//   req.session
 //     .getProducts({ where: { id: productId } })
 //     .then(([product]) => {
 //       if (!product) {
@@ -59,7 +59,7 @@
 // // Update an existing product
 // export function postEditProduct(req, res, next) {
 //   const { productId, title, imageUrl, price, description } = req.body;
-//   const { id } = req.user;
+//   const { id } = req.session;
 
 //   Product.update(
 //     {
@@ -82,7 +82,7 @@
 // // Delete a product
 // export function postDeleteProduct(req, res, next) {
 //   const { productId } = req.body;
-//   const { id } = req.user;
+//   const { id } = req.session;
 
 //   Product.destroy({ where: { id: productId, userId: id } })
 //     .then(() => {
@@ -96,7 +96,7 @@
 
 // // Get all products and render them
 // export function getProducts(req, res, next) {
-//   req.user
+//   req.session
 //     .getProducts()
 //     .then((products) => {
 //       res.render("admin/products", {
@@ -109,6 +109,9 @@
 // }
 
 import Product from "../models/mongo_product.js";
+import deleteFile from "../util/file.js";
+
+const ITEMS_PER_PAGE = 3;
 
 // Render the Add Product page
 export function getAddProduct(req, res, next) {
@@ -116,49 +119,95 @@ export function getAddProduct(req, res, next) {
     pageTitle: "Add Product",
     path: "/admin/add-product",
     editing: false,
+    product: {
+      title: "",
+      price: "",
+      description: "",
+    },
+    errorMessage: null,
   });
 }
 
 // Add a new product
 export async function postAddProduct(req, res, next) {
   try {
-    const { id } = req.user || {};
-    console.log("REQ User obj", req.user);
-    if (!id) {
-      throw new Error("User not found or not set in request");
+    const { title, price, description } = req.body;
+    const image = req.file;
+
+    if (!image) {
+      return res.status(422).render("admin/edit-product", {
+        pageTitle: "Add Product",
+        path: "/admin/add-product",
+        editing: false,
+        product: {
+          title: title,
+          price: price,
+          description: description,
+        },
+        errorMessage: "Attached file is not an image",
+      });
     }
 
-    // Continue with adding the product logic
-    const { title, price, imageUrl, description } = req.body;
-    const product = new Product(null, title, price, imageUrl, description, id);
+    const imageUrl = image.filename; // Store only the filename
+    const { _id } = req.user;
+
+    const product = new Product({
+      title: title,
+      price: price,
+      imageUrl, // Save filename in DB
+      description: description,
+      userId: _id,
+    });
 
     await product.save();
     console.log("Product added");
     res.redirect("/admin/products");
   } catch (err) {
-    console.error("Error adding product:", err);
-    res.redirect("/admin/add-product");
+    const error = new Error(err);
+    error.httpStatusCode = 500;
+    return next(error);
   }
 }
 
 // Get all products and render them
 export function getProducts(req, res, next) {
-  Product.fetchAll()
+  const page = +req.query.page || 1;
+
+  let totalItems;
+
+  Product.find()
+    .countDocuments()
+    .then((count) => {
+      totalItems = count;
+      return Product.find()
+        .skip((page - 1) * ITEMS_PER_PAGE)
+        .limit(ITEMS_PER_PAGE);
+    })
     .then((products) => {
       res.render("admin/products", {
         products: products,
         pageTitle: "Admin Products",
         path: "/admin/products",
+        currentPage: page,
+        hasNextPage: ITEMS_PER_PAGE * page < totalItems,
+        hasPreviousPage: page > 1,
+        nextPage: page + 1,
+        previousPage: page - 1,
+        lastPage: Math.ceil(totalItems / ITEMS_PER_PAGE),
       });
     })
     .catch((err) => {
-      console.error("Error fetching products:", err);
-      res.redirect("/");
+      const error = new Error(err);
+      error.httpStatusCode = 500;
+      return next(error);
     });
 }
+
 // Render the Edit Product page
 export async function getEditProduct(req, res, next) {
   const editMode = req.query.edit;
+  const errorMessage = req.session.errorMessage;
+  req.session.errorMessage = null;
   if (!editMode) {
     return res.redirect("/");
   }
@@ -177,27 +226,56 @@ export async function getEditProduct(req, res, next) {
       pageTitle: "Edit Product",
       path: "/admin/edit-product",
       editing: editMode,
+      errorMessage,
     });
   } catch (err) {
-    console.error("Could not find a product with the id:", err);
-    res.redirect("/");
+    const error = new Error(err);
+    error.httpStatusCode = 500;
+    return next(error);
   }
 }
 
 // Update an existing product
 export function postEditProduct(req, res, next) {
-  const { productId, title, imageUrl, price, description } = req.body;
+  const { productId, title, price, description } = req.body;
+  const image = req.file;
 
-  const product = new Product(productId, title, price, imageUrl, description);
+  // Find the product by ID first to check ownership
+  Product.findById(productId)
+    .then((product) => {
+      if (!product) {
+        console.log("Product not found");
+        return res.status(404).send("Product not found");
+      }
 
-  product
-    .save()
+      // Check if the current user is the owner of the product
+      if (product.userId.toString() !== req.user._id.toString()) {
+        console.log("Unauthorized attempt to edit product");
+        return res.status(403).send("Unauthorized");
+      }
+
+      // Update product details
+      product.title = title;
+      product.price = price;
+      product.description = description;
+
+      // Update the image URL only if a new image was uploaded
+      if (image) {
+        deleteFile(product.imageUrl);
+        // Store only the filename
+        product.imageUrl = image.filename;
+      }
+
+      return product.save();
+    })
     .then(() => {
       console.log("Product updated successfully");
       res.redirect("/admin/products");
     })
     .catch((err) => {
-      console.error("Could not update the product:", err);
+      const error = new Error(err);
+      error.httpStatusCode = 500;
+      return next(error);
     });
 }
 
@@ -205,12 +283,70 @@ export function postEditProduct(req, res, next) {
 export function postDeleteProduct(req, res, next) {
   const { productId } = req.body;
 
-  Product.deleteProduct(productId)
+  // Find the product by ID first to check ownership
+  Product.findById(productId)
+    .then((product) => {
+      if (!product) {
+        console.log("Product not found");
+        return res.status(404).send("Product not found");
+      }
+
+      // Check if the current user is the owner of the product
+      if (product.userId.toString() !== req.user._id.toString()) {
+        console.log("Unauthorized attempt to delete product");
+        return res.status(403).send("Unauthorized");
+      }
+
+      console.log("Product--->", product);
+
+      // Call the delete file function
+      deleteFile(product.imageUrl);
+
+      // If user is the owner, delete the product
+      return Product.deleteOne({ _id: productId });
+    })
     .then(() => {
       console.log("Product deleted successfully");
       res.redirect("/admin/products");
     })
     .catch((err) => {
-      console.error("Could not delete product:", err);
+      const error = new Error(err);
+      error.httpStatusCode = 500;
+      return next(error);
+    });
+}
+
+// Delete a product
+export function deleteProduct(req, res, next) {
+  const { productId } = req.params;
+
+  // Find the product by ID first to check ownership
+  Product.findById(productId)
+    .then((product) => {
+      if (!product) {
+        console.log("Product not found");
+        return res.status(404).send("Product not found");
+      }
+
+      // Check if the current user is the owner of the product
+      if (product.userId.toString() !== req.user._id.toString()) {
+        console.log("Unauthorized attempt to delete product");
+        return res.status(403).send("Unauthorized");
+      }
+
+      console.log("Product--->", product);
+
+      // Call the delete file function
+      deleteFile(product.imageUrl);
+
+      // If user is the owner, delete the product
+      return Product.deleteOne({ _id: productId });
+    })
+    .then(() => {
+      console.log("Product deleted successfully");
+      res.status(200).json({ message: "Product deleted successfully" });
+    })
+    .catch((err) => {
+      res.status(500).json({ message: "Failed to delete product" });
     });
 }

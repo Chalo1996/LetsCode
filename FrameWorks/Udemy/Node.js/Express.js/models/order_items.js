@@ -1,14 +1,44 @@
-import sequelize from "../util/database.js";
-import { DataTypes } from "sequelize";
+import mongoose from "mongoose";
 
-const OrderItem = sequelize.define("OrderItem", {
-  id: {
-    type: DataTypes.UUID,
-    defaultValue: DataTypes.UUIDV4,
-    allowNull: false,
-    primaryKey: true,
+const { Schema } = mongoose;
+
+const orderSchema = new Schema({
+  user: {
+    id: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    name: {
+      type: String,
+      required: true,
+    },
+    email: {
+      type: String,
+      required: true,
+    },
   },
-  quantity: DataTypes.INTEGER,
+  items: [
+    {
+      productId: {
+        type: Schema.Types.ObjectId,
+        ref: "Product",
+        required: true,
+      },
+      quantity: { type: Number, required: true },
+    },
+  ],
+  date: {
+    type: Date,
+    default: Date.now,
+  },
+  status: {
+    type: String,
+    // Example field to track the status of the order
+    default: "Pending",
+  },
 });
 
-export default OrderItem;
+const Order = mongoose.model("Order", orderSchema);
+
+export default Order;

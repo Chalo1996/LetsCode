@@ -222,19 +222,45 @@
 //   });
 // }
 
+import fs from "fs";
+import path from "path";
+import PDFDocument from "pdfkit";
 import Product from "../models/mongo_product.js";
+import Order from "../models/order_items.js";
+import Stripe from "stripe";
+
+const ITEMS_PER_PAGE = 3;
 
 export function getProducts(req, res, next) {
-  Product.fetchAll()
+  const page = +req.query.page || 1;
+
+  let totalItems;
+
+  Product.find()
+    .countDocuments()
+    .then((count) => {
+      totalItems = count;
+      return Product.find()
+        .skip((page - 1) * ITEMS_PER_PAGE)
+        .limit(ITEMS_PER_PAGE);
+    })
     .then((products) => {
       res.render("shop/product-list", {
         products,
         pageTitle: "Products",
         path: "/products",
+        currentPage: page,
+        hasNextPage: ITEMS_PER_PAGE * page < totalItems,
+        hasPreviousPage: page > 1,
+        nextPage: page + 1,
+        previousPage: page - 1,
+        lastPage: Math.ceil(totalItems / ITEMS_PER_PAGE),
       });
     })
     .catch((err) => {
-      console.log(err);
+      const error = new Error(err);
+      error.httpStatusCode = 500;
+      return next(error);
     });
 }
 
@@ -249,22 +275,43 @@ export function getProduct(req, res, next) {
         path: "/products",
       });
     })
-    .catch((err) =>
-      console.error(`Could not find product with the ${productId} id:`, err)
-    );
+    .catch((err) => {
+      const error = new Error(err);
+      error.httpStatusCode = 500;
+      return next(error);
+    });
 }
 
 export function getIndex(req, res, next) {
-  Product.fetchAll()
+  const page = +req.query.page || 1;
+
+  let totalItems;
+
+  Product.find()
+    .countDocuments()
+    .then((count) => {
+      totalItems = count;
+      return Product.find()
+        .skip((page - 1) * ITEMS_PER_PAGE)
+        .limit(ITEMS_PER_PAGE);
+    })
     .then((products) => {
       res.render("shop/index", {
         products,
         pageTitle: "Shop",
         path: "/",
+        currentPage: page,
+        hasNextPage: ITEMS_PER_PAGE * page < totalItems,
+        hasPreviousPage: page > 1,
+        nextPage: page + 1,
+        previousPage: page - 1,
+        lastPage: Math.ceil(totalItems / ITEMS_PER_PAGE),
       });
     })
     .catch((err) => {
-      console.error(err.stack);
+      const error = new Error(err);
+      error.httpStatusCode = 500;
+      return next(error);
     });
 }
 
@@ -272,22 +319,31 @@ export async function getCart(req, res, next) {
   try {
     const { user } = req;
 
-    user.getCart().then((products) => {
-      const totalPrice = products.reduce((total, product) => {
-        return total + parseFloat(product.price) * product.quantity;
-      }, 0);
-      res.render("shop/cart", {
-        products,
-        totalPrice,
-        pageTitle: "Cart",
-        path: "/cart",
-      });
-    });
+    console.log("USER--->", user);
+
+    // Fetch the user's cart
+    const products = await user.populate("cart.items.productId");
+    console.log("POPULATED PRODUCTS", products);
+    console.log("POPULATED CART", products.cart.items);
+
+    const populatedProds = products.cart.items;
+
+    // Calculate the total price
+    const totalPrice = populatedProds.reduce((total, product) => {
+      return total + parseFloat(product.productId.price) * product.quantity;
+    }, 0);
 
     // Render the cart view with the fetched products and total price
+    res.render("shop/cart", {
+      products: populatedProds,
+      totalPrice,
+      pageTitle: "Cart",
+      path: "/cart",
+    });
   } catch (err) {
-    console.error("Error fetching cart:", err);
-    res.redirect("/cart");
+    const error = new Error(err);
+    error.httpStatusCode = 500;
+    return next(error);
   }
 }
 
@@ -323,27 +379,196 @@ export async function postOrder(req, res, next) {
     .catch((err) => console.error("Could not create an order", err));
 }
 
-export async function getOrders(req, res, next) {
+export async function getCheckoutSuccess(req, res, next) {
   const { user } = req;
 
   user
-    .getAllOrders()
-    .then((orders) => {
-      console.log("Orders", orders);
-      res.render("shop/orders", {
-        orders,
-        pageTitle: "Orders",
-        path: "/orders",
-      });
-    })
-    .catch((err) => {
-      console.error(err);
-    });
+    .addOrder()
+    .then(() => res.redirect("/orders"))
+    .catch((err) => console.error("Could not create an order", err));
 }
 
+export async function getOrders(req, res, next) {
+  const { user } = req;
+
+  try {
+    // Fetch all orders associated with the user by querying the Order collection
+    const orders = await Order.find({ "user.id": user._id });
+
+    // Process each order to populate the products
+    const myOrders = await Promise.all(
+      orders.map(async (order) => {
+        // Map through the items in the order to get the products
+        const populatedItems = await Promise.all(
+          order.items.map(async (item) => {
+            const product = await Product.findById(item.productId);
+            return {
+              productId: item.productId,
+              title: product ? product.title : "Unknown Product",
+              price: product ? product.price : 0,
+              quantity: item.quantity,
+            };
+          })
+        );
+
+        // Return a new structure for each order
+        return {
+          orderId: order._id,
+          items: populatedItems,
+          date: order.date,
+        };
+      })
+    );
+
+    console.log("Orders", myOrders);
+
+    // Render the orders page with the processed myOrders data
+    res.render("shop/orders", {
+      orders: myOrders,
+      pageTitle: "Your Orders",
+      path: "/orders",
+    });
+  } catch (err) {
+    const error = new Error(err);
+    error.httpStatusCode = 500;
+    return next(error);
+  }
+}
+
+// Get the invoice for every order - downloadable
+export async function getInvoice(req, res, next) {
+  const { orderId } = req.params;
+  const invoiceName = `invoice-${orderId}.pdf`;
+  const invoicePath = path.join("data", "invoices", invoiceName);
+
+  try {
+    const order = await Order.findById(orderId).populate("items.productId");
+
+    console.log("ORDER-", order);
+
+    if (!order) {
+      return next(new Error("No order found"));
+    }
+
+    if (order.user.id.toString() !== req.user._id.toString()) {
+      return next(new Error("Unauthorized"));
+    }
+
+    console.log("Invoice path-", invoicePath);
+
+    // Check if the invoice already exists
+    fs.access(invoicePath, fs.constants.F_OK, (err) => {
+      if (err) {
+        // If the file doesn't exist, generate the invoice PDF
+        const pdfDoc = new PDFDocument();
+
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="${invoiceName}.pdf"`
+        );
+
+        // Stream the PDF document to the client and also save it to the file system
+        pdfDoc.pipe(fs.createWriteStream(invoicePath));
+        pdfDoc.pipe(res);
+
+        // Customize the invoice PDF
+        pdfDoc.fontSize(26).text("Invoice", { underline: true });
+        pdfDoc.text(`Order ID: ${orderId}`);
+        pdfDoc.text("-----------------------");
+
+        // Dynamically fetch product details
+        let totalPrice = 0;
+        order.items.forEach((item) => {
+          const product = item.productId;
+          const productPrice = product ? product.price : 0;
+          const productTitle = product ? product.title : "Unknown Product";
+
+          pdfDoc
+            .fontSize(14)
+            .text(`${productTitle} - ${item.quantity} x $${productPrice}`);
+
+          totalPrice += productPrice * item.quantity;
+        });
+
+        pdfDoc.text("-----------------------");
+        pdfDoc.fontSize(20).text(`Total Price: $${totalPrice}`);
+
+        pdfDoc.fontSize(14).text("Thank you for your purchase!");
+
+        // Finalize the PDF and send it
+        pdfDoc.end();
+      } else {
+        // If file exists, stream it directly
+        const file = fs.createReadStream(invoicePath);
+        const stat = fs.statSync(invoicePath);
+
+        res.setHeader("Content-Length", stat.size);
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="${invoiceName}"`
+        );
+
+        file.pipe(res);
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// Get Checkout
 export async function getCheckout(req, res, next) {
-  res.render("shop/checkout", {
-    pageTitle: "Checkout",
-    path: "/checkout",
-  });
+  const stripe = Stripe(
+    "sk_test_51Q67hzBu0F5ItawdvJ6rLgvBvdAt7YIdCle69vQM5aTanaGyPPP59XjyPFmlU9LHdYvPJ4a3RE2vesJIkfNdXNlB00PWVah8tI"
+  );
+
+  let products;
+  let total = 0;
+
+  try {
+    const user = await req.user.populate("cart.items.productId");
+
+    products = user.cart.items;
+
+    products.forEach((product) => {
+      if (product.productId) {
+        total += product.quantity * product.productId.price;
+      }
+    });
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      line_items: products.map((product) => {
+        return {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: product.productId.title,
+              description: product.productId.description,
+            },
+            unit_amount: product.productId.price * 100, // Stripe expects amounts in cents
+          },
+          quantity: product.quantity,
+        };
+      }),
+      mode: "payment",
+      success_url: req.protocol + "://" + req.get("host") + "/checkout/success",
+      cancel_url: req.protocol + "://" + req.get("host") + "/checkout/cancel",
+    });
+
+    res.render("shop/checkout", {
+      pageTitle: "Checkout",
+      path: "/checkout",
+      products,
+      total,
+      sessionId: session.id,
+    });
+  } catch (err) {
+    console.error("Checkout error:", err);
+    const error = new Error("Failed to load checkout page");
+    error.httpStatusCode = 500;
+    next(error);
+  }
 }
