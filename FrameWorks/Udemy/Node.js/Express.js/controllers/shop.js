@@ -520,9 +520,7 @@ export async function getInvoice(req, res, next) {
 
 // Get Checkout
 export async function getCheckout(req, res, next) {
-  const stripe = Stripe(
-    "sk_test_51Q67hzBu0F5ItawdvJ6rLgvBvdAt7YIdCle69vQM5aTanaGyPPP59XjyPFmlU9LHdYvPJ4a3RE2vesJIkfNdXNlB00PWVah8tI"
-  );
+  const stripe = Stripe(process.env.STRIPE_KEY);
 
   let products;
   let total = 0;
